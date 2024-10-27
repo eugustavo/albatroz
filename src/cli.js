@@ -9,30 +9,43 @@ const { execSync } = require('child_process');
 const ora = require('ora');
 const axios = require('axios');
 
-// Lista de componentes disponíveis
-const AVAILABLE_COMPONENTS = ['Alert', 'Avatar', 'Card', 'Toast'].sort();
+const AVAILABLE_COMPONENTS = ['alert', 'avatar', 'card', 'toast'];
 
-// Caminho do arquivo de configuração
 const CONFIG_FILE = 'albatroz.json';
 
-// Configuração padrão
 const DEFAULT_CONFIG = {
-  baseUrl: 'https://raw.githubusercontent.com/your-repo/albatroz/main/components',
+  baseUrl: 'https://raw.githubusercontent.com/eugustavo/albatroz/refs/heads/main/src/components',
   dependencies: {
     expo: false,
     'lucide-react-native': false
   }
 };
 
-// Função para verificar se é um projeto Expo válido
+const formatComponentName = (name) => {
+  if (!name) return '';
+  return name.charAt(0).toLowerCase() + name.slice(1).toLowerCase();
+};
+
+const downloadComponent = async (componentName, baseUrl) => {
+  try {
+    const response = await axios.get(`${baseUrl}/${componentName.toLowerCase()}.tsx`);
+    return response.data;
+  } catch (error) {
+    if (error.response && error.response.status === 404) {
+      throw new Error('Component not found in repository');
+    }
+    throw error;
+  }
+};
+
 const checkExpoProject = () => {
   try {
     const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
     const dependencies = { ...packageJson.dependencies, ...packageJson.devDependencies };
     
-    // Verifica se expo está nas dependências
     if (!dependencies.expo) {
-      console.error(chalk.red('\nError: This is not an Expo project, at this moment, we only support Expo projects.'));
+      console.error(chalk.red('\nError: This is not an Expo project'));
+      console.log(chalk.yellow('\nAt this moment, we only support Expo projects.'));
       console.log(chalk.gray('\nPlease create a new project using:'));
       console.log(chalk.blue('\n  npx create-expo-app@latest'));
       process.exit(1);
@@ -46,7 +59,6 @@ const checkExpoProject = () => {
   }
 };
 
-// Função para verificar dependência no package.json
 const checkDependency = (dependency) => {
   try {
     const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
@@ -57,7 +69,6 @@ const checkDependency = (dependency) => {
   }
 };
 
-// Função para verificar e criar arquivo de configuração
 const ensureConfig = async () => {
   if (!fs.existsSync(CONFIG_FILE)) {
     await initializeProject();
@@ -66,29 +77,57 @@ const ensureConfig = async () => {
   return true;
 };
 
-// Função para ler configuração
 const readConfig = () => {
   return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
 };
 
-// Função para salvar configuração
 const saveConfig = (config) => {
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
 };
 
-// Função para inicializar o projeto
+const addComponent = async (componentName, config) => {
+  const spinner = ora('Adding component...').start();
+
+  try {
+    const normalizedName = componentName.toLowerCase();
+    
+    if (!AVAILABLE_COMPONENTS.includes(normalizedName)) {
+      spinner.fail(chalk.red('Component not available'));
+      console.log(chalk.blue('\nAvailable components:'));
+      AVAILABLE_COMPONENTS.forEach(comp => {
+        console.log(chalk.yellow(`  - ${formatComponentName(comp)}`));
+      });
+      return;
+    }
+
+    const componentContent = await downloadComponent(componentName, config.baseUrl);
+
+    const componentPath = path.join(process.cwd(), 'src', 'components', 'ui');
+    await fs.ensureDir(componentPath);
+
+    const formattedName = formatComponentName(componentName);
+    await fs.writeFile(
+      path.join(componentPath, `${formattedName}.tsx`),
+      componentContent
+    );
+
+    spinner.succeed(chalk.green(`Component ${formattedName} added successfully!`));
+    console.log(chalk.gray(`\nLocation: src/components/ui/${formattedName}.tsx`));
+  } catch (error) {
+    spinner.fail(chalk.red(`Failed to add component ${formatComponentName(componentName)}`));
+    console.error(chalk.red('\nError details:'), error.message);
+  }
+};
+
 const initializeProject = async () => {
   console.log(chalk.blue('\nInitializing Albatroz UI...'));
 
-  // Verificar se é um projeto Expo
   checkExpoProject();
 
-  // Verificar dependências existentes
   const config = { ...DEFAULT_CONFIG };
   config.dependencies.expo = checkDependency('expo');
   config.dependencies['lucide-react-native'] = checkDependency('lucide-react-native');
 
-  // Perguntar package manager apenas se precisar instalar algo
   let packageManager;
   if (!config.dependencies['lucide-react-native']) {
     const response = await inquirer.prompt([
@@ -118,7 +157,6 @@ const initializeProject = async () => {
       }
     }
 
-    // Salvar configuração
     saveConfig(config);
     
     spinner.succeed(chalk.green('Project initialized successfully!'));
@@ -130,15 +168,11 @@ const initializeProject = async () => {
   }
 };
 
-// Resto do código continua igual...
-
-// Configuração inicial do programa
 program
   .name('@albatroz/ui')
   .description('CLI for Albatroz UI components')
   .version('1.0.0');
 
-// Comando init
 program
   .command('init')
   .description('Initialize Albatroz UI in your project')
@@ -146,28 +180,36 @@ program
     await initializeProject();
   });
 
-// Comando add
 program
   .command('add [component]')
   .description('Add a component to your project')
   .action(async (component) => {
     try {
-      // Verificar se é um projeto Expo primeiro
       checkExpoProject();
 
-      // Verificar se o projeto está inicializado
       if (!await ensureConfig()) {
         console.log(chalk.yellow('\nPlease run init command first.'));
         return;
       }
 
-      // Resto do código do comando add continua igual...
+      const config = readConfig();
+
+      if (!component) {
+        console.log(chalk.blue('\nAvailable components:'));
+        AVAILABLE_COMPONENTS.forEach(comp => {
+          console.log(chalk.yellow(`  - ${formatComponentName(comp)}`));
+        });
+        console.log(chalk.gray('\nUsage:'));
+        console.log(chalk.yellow('  npx @albatroz/ui add <component>'));
+        return;
+      }
+
+      await addComponent(component, config);
     } catch (error) {
       console.error(chalk.red('\nError:'), error.message);
     }
   });
 
-// Tratar comandos desconhecidos
 program.on('command:*', () => {
   console.error(chalk.red('\nError: Invalid command'));
   console.log(chalk.gray('\nAvailable commands:'));
@@ -176,5 +218,4 @@ program.on('command:*', () => {
   process.exit(1);
 });
 
-// Iniciar o programa
 program.parse(process.argv);
