@@ -1,0 +1,25 @@
+{
+  "name": "@albatroz/ui",
+  "version": "1.0.0",
+  "description": "CLI for Albatroz UI components",
+  "main": "src/cli.js",
+  "bin": {
+    "@albatroz/ui": "src/cli.js",
+    "albatroz/ui": "src/cli.js"
+  },
+  "keywords": [
+    "cli",
+    "ui",
+    "react-native"
+  ],
+  "author": "Gustavo Souza",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "chalk": "^4.1.2",
+    "commander": "^11.0.0",
+    "fs-extra": "^11.1.1",
+    "inquirer": "^8.2.4",
+    "ora": "^5.4.1"
+  }
+}
